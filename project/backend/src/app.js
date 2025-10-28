@@ -1,17 +1,28 @@
-import express from "express";
-import cors from "cors";
-import carritoRoutes from "./routes/carritoRoutes.js";
-import ubicacionRoutes from "./routes/ubicacionRoutes.js";
-import usuarioRoutes from "./routes/usuarioRoutes.js";
+// src/utils/app.js
+const express = require('express');
+const cors = require('cors');
+
+const carritoRoutes = require('../routes/carritoRoutes');
+const ubicacionRoutes = require('../routes/ubicacionRoutes');
+const usuarioRoutes = require('../routes/usuarioRoutes');
 
 const app = express();
 
+// Middlewares
 app.use(cors());
 app.use(express.json());
 
-// Rutas
-app.use("/api/carritos", carritoRoutes);
-app.use("/api/ubicaciones", ubicacionRoutes);
-app.use("/api/usuarios", usuarioRoutes);
+// Healthcheck
+app.get('/health', (_req, res) => res.json({ ok: true }));
 
-export default app;
+// Rutas principales
+app.use('/api/usuarios', usuarioRoutes);
+app.use('/api/carritos', carritoRoutes);
+app.use('/api/ubicaciones', ubicacionRoutes);
+
+// Ruta no encontrada
+app.use((req, res) => {
+  res.status(404).json({ message: '❌ Ruta no encontrada' });
+});
+
+module.exports = app;

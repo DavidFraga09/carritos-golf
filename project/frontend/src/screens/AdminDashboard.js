@@ -16,58 +16,44 @@ import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
 import { API } from "../api/api";
 import useAuth from "../hooks/useAuth";
 
+// 🎨 Paleta premium estilo resort
 const COLORS = {
-  PRIMARY: '#1E3F20', 
-  SECONDARY: '#59775B', 
-  ACCENT_PRIMARY: '#FFC107', 
-  BACKGROUND: '#F5F5DC', 
-  CARD_BG: '#FFFFFF',
-  ALERT: '#F44336', 
-  SUCCESS: '#8BC34A', 
-  TEXT_DARK: '#333333', 
-  TEXT_LIGHT: '#FFFFFF',
+  PRIMARY: "#204D45",
+  SECONDARY: "#77A89A",
+  ACCENT: "#F6C945",
+  BACKGROUND: "#F2EFE7",
+  CARD: "#FFFFFF",
+  DANGER: "#D9534F",
+  SUCCESS: "#7CB342",
+  TEXT: "#2A2A2A",
+  LIGHT_TEXT: "#FFFFFF",
+  BORDER: "#DFDCCE",
+  SHADOW: "rgba(0,0,0,0.12)",
 };
 
-// Coordenadas para la geocerca
-const RESORT_COORDS = { latitude: 20.695009, longitude: -87.029062 };
+// Coordenadas
 const GEOFENCE_COORDS = { latitude: 20.6965, longitude: -87.0295, radius: 200 };
 
-// Componente de Tarjeta de Resumen
-const SummaryCard = ({ icon, label, value, color }) => {
-  const textColor = (color === COLORS.PRIMARY || color === COLORS.ALERT || color === COLORS.ACCENT_PRIMARY) ? COLORS.TEXT_LIGHT : COLORS.TEXT_DARK;
+const SummaryCard = ({ icon, label, value }) => (
+  <View style={styles.summaryCard}>
+    <MaterialIcons name={icon} size={28} color={COLORS.PRIMARY} />
+    <Text style={styles.summaryValue}>{value}</Text>
+    <Text style={styles.summaryLabel}>{label}</Text>
+  </View>
+);
 
-  return (
-    <View style={[styles.summaryCard, { backgroundColor: color }]}>
-      <MaterialIcons name={icon} size={28} color={textColor} />
-      <Text style={[styles.summaryValue, { color: textColor }]}>{value}</Text>
-      <Text style={[styles.summaryLabel, { color: textColor }]}>{label}</Text>
-    </View>
-  );
-};
-
-// Indicador de Batería
 const BatteryIndicator = ({ percentage }) => {
-  let iconName;
-  let color;
+  let icon = "battery-half";
+  let color = COLORS.SUCCESS;
 
-  if (percentage > 75) { 
-    iconName = 'battery-full'; 
-    color = COLORS.SUCCESS; 
-  } else if (percentage > 50) { 
-    iconName = 'battery-three-quarters'; 
-    color = COLORS.SUCCESS; 
-  } else if (percentage > 30) { 
-    iconName = 'battery-half'; 
-    color = COLORS.ACCENT_PRIMARY; 
-  } else { 
-    iconName = 'battery-quarter'; 
-    color = COLORS.ALERT; 
-  }
+  if (percentage <= 30) { icon = "battery-quarter"; color = COLORS.DANGER; }
+  if (percentage > 50) { icon = "battery-three-quarters"; }
+  if (percentage > 75) { icon = "battery-full"; }
 
   return (
-    <View style={styles.batteryContainer}>
-      <Ionicons name={iconName} size={20} color={color} />
-      <Text style={[styles.batteryText, { color }]}>{percentage}%</Text>
+    <View style={{ flexDirection: "row", alignItems: "center" }}>
+      <Ionicons name={icon} size={18} color={color} />
+      <Text style={{ marginLeft: 4, fontWeight: "700", color }}>{percentage}%</Text>
     </View>
   );
 };
@@ -81,24 +67,20 @@ const AdminDashboard = ({ navigation }) => {
   const mapRef = useRef(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    fetchCarritos();
-  }, []);
-
+  useEffect(() => { fetchCarritos(); }, []);
   useEffect(() => {
     Animated.timing(fadeAnim, {
       toValue: selectedCart ? 1 : 0,
       duration: 300,
       useNativeDriver: true,
     }).start();
-  }, [selectedCart, fadeAnim]);
+  }, [selectedCart]);
 
   const fetchCarritos = async () => {
     try {
       const res = await API.get("/carritos");
       setCarritos(res.data);
     } catch (err) {
-      console.error("Error al cargar carritos:", err.response?.data || err.message);
       Alert.alert("❌ Error", "No se pudieron cargar los carritos");
     } finally {
       setLoading(false);
@@ -106,97 +88,66 @@ const AdminDashboard = ({ navigation }) => {
     }
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchCarritos();
-  };
+  const metrics = useMemo(() => ({
+    total: carritos.length,
+    disponibles: carritos.filter(c => c.estado === "activo").length,
+    bateriaBaja: carritos.filter(c => c.bateria < 30).length,
+  }), [carritos]);
 
-  const handleLogout = () => {
-    Alert.alert(
-      "Cerrar sesión",
-      "¿Estás seguro de que quieres cerrar sesión?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Sí, cerrar", onPress: () => logout(navigation) }
-      ]
-    );
-  };
+  if (loading) return (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color={COLORS.PRIMARY} />
+      <Text style={{ marginTop: 10 }}>Cargando carritos...</Text>
+    </View>
+  );
 
-  const handleSelectCart = (cart) => {
-    setSelectedCart(cart._id === selectedCart?._id ? null : cart);
-    
+  const onSelectCart = (cart) => {
+    setSelectedCart(selectedCart?._id === cart._id ? null : cart);
+
     if (mapRef.current) {
       mapRef.current.animateToRegion({
         latitude: cart.ubicacion_actual?.latitud || 20.6375,
         longitude: cart.ubicacion_actual?.longitud || -87.0702,
         latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      }, 1000);
+        longitudeDelta: 0.005
+      }, 800);
     }
   };
 
-  const metrics = useMemo(() => {
-    const totalCarts = carritos.length;
-    const availableCarts = carritos.filter(c => c.estado === "activo").length;
-    const inUseCarts = carritos.filter(c => c.estado === "en_uso").length;
-    const maintenanceCarts = carritos.filter(c => c.estado === "mantenimiento").length;
-    const lowBatteryCarts = carritos.filter(c => c.bateria < 30).length;
-    const avgBattery = Math.round(carritos.reduce((sum, cart) => sum + cart.bateria, 0) / (totalCarts || 1));
-
-    return { totalCarts, availableCarts, inUseCarts, maintenanceCarts, lowBatteryCarts, avgBattery };
-  }, [carritos]);
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.PRIMARY} />
-        <Text style={styles.loadingText}>Cargando carritos...</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      {/* Header */}
+
+      {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Ionicons name="car-sport" size={32} color={COLORS.PRIMARY} />
+          <Ionicons name="car-sport" size={32} color={COLORS.LIGHT_TEXT} />
           <Text style={styles.headerTitle}>Panel de Administración</Text>
         </View>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <Ionicons name="log-out-outline" size={24} color={COLORS.ALERT} />
+        <TouchableOpacity style={styles.logoutButton} onPress={() => logout(navigation)}>
+          <Ionicons name="log-out-outline" size={24} color={COLORS.LIGHT_TEXT} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.scrollViewContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[COLORS.PRIMARY]}
-          />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchCarritos(); }} />}
       >
-        {/* Resumen de KPIs */}
+
+        {/* KPIs */}
         <View style={styles.summaryContainer}>
-          <SummaryCard icon="directions-car" label="Total" value={metrics.totalCarts} color={COLORS.PRIMARY} />
-          <SummaryCard icon="check-circle" label="Disponibles" value={metrics.availableCarts} color={COLORS.SUCCESS} />
-          <SummaryCard icon="warning" label="Batería Baja" value={metrics.lowBatteryCarts} color={COLORS.ALERT} />
+          <SummaryCard icon="directions-car" label="Total" value={metrics.total} />
+          <SummaryCard icon="check-circle" label="Disponibles" value={metrics.disponibles} />
+          <SummaryCard icon="warning" label="Batería Baja" value={metrics.bateriaBaja} />
         </View>
 
-        {/* Botón de Gestión de Usuarios */}
-        <TouchableOpacity 
-          style={styles.managementButton}
-          onPress={() => navigation.navigate("AdminManagement")}
-        >
-          <Ionicons name="people" size={20} color="#fff" />
+        {/* Botón Gestión */}
+        <TouchableOpacity style={styles.managementButton} onPress={() => navigation.navigate("AdminManagement")}>
+          <Ionicons name="people" size={20} color={COLORS.LIGHT_TEXT} />
           <Text style={styles.managementButtonText}>Gestionar Usuarios</Text>
         </TouchableOpacity>
 
-        {/* Mapa */}
+        {/* MAPA */}
         <View style={styles.mapContainer}>
-          <Text style={styles.sectionTitle}>Ubicación en Tiempo Real</Text>
           <MapView
             ref={mapRef}
             style={styles.map}
@@ -207,16 +158,12 @@ const AdminDashboard = ({ navigation }) => {
               longitudeDelta: 0.05,
             }}
           >
-            {/* Geocerca */}
             <Circle
               center={GEOFENCE_COORDS}
               radius={GEOFENCE_COORDS.radius}
-              strokeWidth={2}
-              strokeColor={COLORS.ALERT}
-              fillColor={COLORS.ALERT + '20'}
+              strokeColor={COLORS.DANGER}
+              fillColor={COLORS.DANGER + "33"}
             />
-
-            {/* Marcadores de carritos */}
             {carritos.map((cart) => (
               <Marker
                 key={cart._id}
@@ -225,298 +172,110 @@ const AdminDashboard = ({ navigation }) => {
                   longitude: cart.ubicacion_actual?.longitud || -87.0702,
                 }}
                 title={cart.identificador}
-                description={`Batería: ${cart.bateria}% | Estado: ${cart.estado}`}
-                pinColor={
-                  cart.estado === "activo" ? "green" : 
-                  cart.estado === "en_uso" ? "blue" : 
-                  cart.bateria < 30 ? "red" : "orange"
-                }
-                onPress={() => handleSelectCart(cart)}
+                onPress={() => onSelectCart(cart)}
               />
             ))}
           </MapView>
 
-          {/* Tarjeta de detalles del carrito seleccionado */}
           {selectedCart && (
             <Animated.View style={[styles.detailCard, { opacity: fadeAnim }]}>
-              <View style={styles.detailCardHeader}>
-                <Text style={styles.detailCardTitle}>{selectedCart.identificador}</Text>
-                <TouchableOpacity onPress={() => setSelectedCart(null)}>
-                  <Ionicons name="close" size={24} color={COLORS.PRIMARY} />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.detailCardBody}>
-                <Text style={styles.detailText}>Modelo: {selectedCart.modelo}</Text>
-                <Text style={styles.detailText}>Estado: {selectedCart.estado}</Text>
-                <BatteryIndicator percentage={selectedCart.bateria} />
-              </View>
+              <Text style={styles.detailCardTitle}>{selectedCart.identificador}</Text>
+              <Text>Estado: {selectedCart.estado}</Text>
+              <BatteryIndicator percentage={selectedCart.bateria} />
             </Animated.View>
           )}
         </View>
 
-        {/* Lista de carritos */}
-        <View style={styles.listContainer}>
-          <Text style={styles.sectionTitle}>Gestión de Carritos ({carritos.length})</Text>
-          <FlatList
-            data={carritos}
-            keyExtractor={(item) => item._id}
-            renderItem={({ item }) => (
-              <TouchableOpacity 
-                style={[
-                  styles.cartCard,
-                  selectedCart?._id === item._id && styles.cartCardSelected
-                ]}
-                onPress={() => handleSelectCart(item)}
-              >
-                <View style={styles.cartCardLeft}>
-                  <View style={[
-                    styles.cartIcon,
-                    { backgroundColor: 
-                      item.estado === "activo" ? COLORS.SUCCESS : 
-                      item.estado === "en_uso" ? COLORS.ACCENT_PRIMARY : COLORS.ALERT 
-                    }
-                  ]}>
-                    <FontAwesome5 name="car" size={16} color={COLORS.TEXT_LIGHT} />
-                  </View>
-                  <View>
-                    <Text style={styles.cartId}>{item.identificador}</Text>
-                    <Text style={styles.cartInfo}>Estado: {item.estado}</Text>
-                  </View>
-                </View>
-                <View style={styles.cartCardRight}>
-                  {item.bateria < 30 && (
-                    <Ionicons name="warning" size={20} color={COLORS.ALERT} />
-                  )}
-                  <BatteryIndicator percentage={item.bateria} />
-                </View>
-              </TouchableOpacity>
-            )}
-            scrollEnabled={false}
-          />
-        </View>
+        {/* LISTA */}
+        <FlatList
+          data={carritos}
+          keyExtractor={(item) => item._id}
+          scrollEnabled={false}
+          renderItem={({ item }) => (
+            <TouchableOpacity onPress={() => onSelectCart(item)} style={[styles.cartCard, selectedCart?._id === item._id && styles.cartCardSelected]}>
+              <View>
+                <Text style={styles.cartId}>{item.identificador}</Text>
+                <Text style={styles.cartInfo}>Estado: {item.estado}</Text>
+              </View>
+              <BatteryIndicator percentage={item.bateria} />
+            </TouchableOpacity>
+          )}
+        />
+
       </ScrollView>
 
-      {/* Botón de actualizar */}
+      {/* BOTÓN FLOTANTE */}
       <TouchableOpacity style={styles.refreshButton} onPress={fetchCarritos}>
-        <Ionicons name="refresh" size={24} color={COLORS.TEXT_LIGHT} />
+        <Ionicons name="refresh" size={26} color={COLORS.LIGHT_TEXT} />
       </TouchableOpacity>
+
     </View>
   );
 };
 
+// 🎨 ESTILOS MEJORADOS
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#F5F5DC' 
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center"
-  },
-  loadingText: {
-    marginTop: 10,
-    color: '#59775B'
-  },
+  container: { flex: 1, backgroundColor: COLORS.BACKGROUND },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    paddingTop: 60,
-    backgroundColor: '#FFFFFF',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: COLORS.PRIMARY,
+    paddingTop: 50, paddingBottom: 18, paddingHorizontal: 20,
+    borderBottomLeftRadius: 22, borderBottomRightRadius: 22,
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    elevation: 10
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1E3F20',
-    marginLeft: 10,
-  },
-  logoutButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: 'rgba(244, 67, 54, 0.2)',
-  },
-  scrollViewContent: {
-    padding: 15,
-  },
-  summaryContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 15,
-  },
+  headerLeft: { flexDirection: "row", alignItems: "center" },
+  headerTitle: { fontSize: 22, fontWeight: "700", color: COLORS.LIGHT_TEXT, marginLeft: 10 },
+  logoutButton: { padding: 8, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 12 },
+
+  scrollViewContent: { padding: 20 },
+
+  summaryContainer: { flexDirection: "row", justifyContent: "space-between", marginBottom: 20 },
   summaryCard: {
-    flex: 1,
-    marginHorizontal: 4,
-    padding: 15,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    flex: 1, backgroundColor: COLORS.CARD, paddingVertical: 18, borderRadius: 18,
+    alignItems: "center", marginHorizontal: 5, borderWidth: 1, borderColor: COLORS.BORDER,
+    shadowColor: COLORS.SHADOW, shadowOpacity: 0.12, shadowRadius: 8, elevation: 4,
   },
-  summaryValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 5,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    marginTop: 2,
-  },
+  summaryValue: { fontSize: 22, fontWeight: "800", color: COLORS.TEXT, marginTop: 6 },
+  summaryLabel: { fontSize: 13, color: COLORS.SECONDARY, marginTop: 2 },
+
   managementButton: {
-    backgroundColor: '#1E3F20',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 15,
-    shadowColor: '#1E3F20',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    flexDirection: "row", justifyContent: "center", alignItems: "center",
+    backgroundColor: COLORS.PRIMARY, paddingVertical: 14, borderRadius: 16,
+    elevation: 5, marginBottom: 16
   },
-  managementButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1E3F20',
-    marginBottom: 10,
-  },
+  managementButtonText: { color: COLORS.LIGHT_TEXT, marginLeft: 8, fontWeight: "700", fontSize: 16 },
+
   mapContainer: {
-    marginBottom: 20,
+    backgroundColor: COLORS.CARD, padding: 10, borderRadius: 20,
+    borderWidth: 1, borderColor: COLORS.BORDER,
+    shadowColor: COLORS.SHADOW, shadowOpacity: 0.12, shadowRadius: 10,
+    elevation: 5, marginBottom: 25,
   },
-  map: {
-    height: 250,
-    borderRadius: 12,
-  },
+  map: { height: 260, borderRadius: 15 },
+
   detailCard: {
-    position: 'absolute',
-    bottom: 10,
-    left: 10,
-    right: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
+    position: "absolute", bottom: 12, left: 12, right: 12,
+    backgroundColor: COLORS.CARD, padding: 16, borderRadius: 18,
+    borderWidth: 1, borderColor: COLORS.BORDER, elevation: 8
   },
-  detailCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  detailCardTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1E3F20',
-  },
-  detailCardBody: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  detailText: {
-    fontSize: 14,
-    color: '#333333',
-  },
-  listContainer: {
-    marginBottom: 20,
-  },
+  detailCardTitle: { fontSize: 18, fontWeight: "700", marginBottom: 6, color: COLORS.TEXT },
+
   cartCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: 15,
-    marginVertical: 4,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    flexDirection: "row", justifyContent: "space-between",
+    backgroundColor: COLORS.CARD, borderRadius: 16,
+    padding: 16, borderWidth: 1, borderColor: COLORS.BORDER,
+    marginBottom: 8, elevation: 2
   },
-  cartCardSelected: {
-    borderWidth: 2,
-    borderColor: '#1E3F20',
-  },
-  cartCardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  cartIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  cartId: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1E3F20',
-  },
-  cartInfo: {
-    fontSize: 12,
-    color: '#59775B',
-    marginTop: 2,
-  },
-  cartCardRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  batteryContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 10,
-  },
-  batteryText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginLeft: 4,
-  },
+  cartCardSelected: { borderColor: COLORS.PRIMARY, borderWidth: 2 },
+  cartId: { fontSize: 16, fontWeight: "700", color: COLORS.TEXT },
+  cartInfo: { color: COLORS.SECONDARY, marginTop: 2 },
+
   refreshButton: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    backgroundColor: '#1E3F20',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#1E3F20',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    position: "absolute", bottom: 28, right: 20,
+    backgroundColor: COLORS.PRIMARY, width: 62, height: 62, borderRadius: 31,
+    justifyContent: "center", alignItems: "center", elevation: 8,
   },
 });
 
