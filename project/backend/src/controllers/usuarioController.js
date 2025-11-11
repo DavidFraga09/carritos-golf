@@ -7,81 +7,77 @@ exports.register = async (req, res) => {
   try {
     const { nombre, correo, password, rol } = req.body;
 
-    if (!nombre || !correo || !password) {
-      return res.status(400).json({ message: 'nombre, correo y password son obligatorios' });
-    }
+    const existe = await Usuario.findOne({ correo });
+    if (existe) return res.status(400).json({ message: 'El correo ya está registrado' });
 
-    const existing = await Usuario.findOne({ correo });
-    if (existing) return res.status(400).json({ message: 'Correo ya registrado' });
+    const usuario = new Usuario({ nombre, correo, password, rol });
+    await usuario.save();
 
-    const hashed = await bcrypt.hash(password, 10);
-    const nuevo = new Usuario({ nombre, correo, password: hashed, rol: rol || 'usuario' });
-    await nuevo.save();
-
-    res.status(201).json({ message: 'Usuario registrado' });
+    res.status(201).json({ message: 'Usuario registrado correctamente', usuario });
   } catch (err) {
-    res.status(500).json({ message: 'Error al registrar usuario', error: err.message });
+    res.status(400).json({ message: 'Error al registrar usuario', error: err.message });
   }
 };
 
 // POST /login
 exports.login = async (req, res) => {
   try {
-    const { correo, password } = req.body;
-    const user = await Usuario.findOne({ correo });
-    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+    const { email, password } = req.body;
 
-    const ok = await bcrypt.compare(password, user.password);
-    if (!ok) return res.status(401).json({ message: 'Contraseña incorrecta' });
+    const usuario = await Usuario.findOne({ email });
+    if (!usuario) return res.status(404).json({ message: 'Usuario no encontrado' });
 
-    const token = jwt.sign({ id: user._id, rol: user.rol }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const esValido = await bcrypt.compare(password, usuario.password);
+    if (!esValido) return res.status(401).json({ message: 'Contraseña incorrecta' });
+
+    const token = jwt.sign(
+      { id: usuario._id, rol: usuario.rol },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     res.json({
-      message: 'Login exitoso',
+      message: 'Inicio de sesión exitoso',
       token,
-      user: { id: user._id, nombre: user.nombre, correo: user.correo, rol: user.rol }
+      usuario: {
+        id: usuario._id,
+        nombre: usuario.nombre,
+        email: usuario.email,
+        rol: usuario.rol
+      }
     });
   } catch (err) {
     res.status(500).json({ message: 'Error al iniciar sesión', error: err.message });
   }
 };
 
-// GET /profile (requiere auth)
+// GET /profile
 exports.getProfile = async (req, res) => {
   try {
-    const user = await Usuario.findById(req.user.id).select('-password');
-    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
-    res.json(user);
+    const usuario = await Usuario.findById(req.user.id).select('-password');
+    if (!usuario) return res.status(404).json({ message: 'Usuario no encontrado' });
+    res.json(usuario);
   } catch (err) {
     res.status(500).json({ message: 'Error al obtener perfil', error: err.message });
   }
 };
 
-// GET / (listar usuarios)
+// GET /
 exports.getAllUsers = async (_req, res) => {
   try {
-    const users = await Usuario.find(); // para ver password encriptado; para ocultarlo usar .select('-password')
-    res.json(users);
+    const usuarios = await Usuario.find().select('-password');
+    res.json(usuarios);
   } catch (err) {
-    res.status(500).json({ message: 'Error al listar usuarios', error: err.message });
+    res.status(500).json({ message: 'Error al obtener usuarios', error: err.message });
   }
 };
 
-// PUT /:id (actualizar)
+// PUT /:id
 exports.updateUser = async (req, res) => {
   try {
-    const { nombre, correo, password, rol } = req.body;
-
-    const updates = {};
-    if (nombre) updates.nombre = nombre;
-    if (correo) updates.correo = correo;
-    if (rol) updates.rol = rol;
-    if (password) updates.password = await bcrypt.hash(password, 10);
-
-    const user = await Usuario.findByIdAndUpdate(req.params.id, updates, { new: true });
-    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
-
-    res.json({ message: 'Usuario actualizado', user });
+    const usuario = await Usuario.findByIdAndUpdate(req.params.id, req.body, { new: true }).select('-password');
+    if (!usuario) return res.status(404).json({ message: 'Usuario no encontrado' });
+    res.json({ message: 'Usuario actualizado correctamente', usuario });
   } catch (err) {
     res.status(400).json({ message: 'Error al actualizar usuario', error: err.message });
   }
@@ -90,9 +86,9 @@ exports.updateUser = async (req, res) => {
 // DELETE /:id
 exports.deleteUser = async (req, res) => {
   try {
-    const user = await Usuario.findByIdAndDelete(req.params.id);
-    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
-    res.json({ message: 'Usuario eliminado' });
+    const usuario = await Usuario.findByIdAndDelete(req.params.id);
+    if (!usuario) return res.status(404).json({ message: 'Usuario no encontrado' });
+    res.json({ message: 'Usuario eliminado correctamente' });
   } catch (err) {
     res.status(400).json({ message: 'Error al eliminar usuario', error: err.message });
   }

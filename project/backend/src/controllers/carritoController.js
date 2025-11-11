@@ -14,7 +14,7 @@ exports.createCarrito = async (req, res) => {
 // GET /
 exports.getCarritos = async (_req, res) => {
   try {
-    const carritos = await Carrito.find();
+    const carritos = await Carrito.find().populate('asignado_a', 'nombre rol email');
     res.json(carritos);
   } catch (err) {
     res.status(500).json({ message: 'Error al obtener carritos', error: err.message });
@@ -24,7 +24,7 @@ exports.getCarritos = async (_req, res) => {
 // GET /:id
 exports.getCarritoById = async (req, res) => {
   try {
-    const carrito = await Carrito.findById(req.params.id);
+    const carrito = await Carrito.findById(req.params.id).populate('asignado_a', 'nombre rol');
     if (!carrito) return res.status(404).json({ message: 'Carrito no encontrado' });
     res.json(carrito);
   } catch (err) {

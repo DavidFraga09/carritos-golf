@@ -13,7 +13,7 @@ const adminOnly = require('../middlewares/adminOnly');
 router.post('/', auth, adminOnly, createCarrito);
 router.get('/', auth, getCarritos);
 router.get('/:id', auth, getCarritoById);
-router.put('/:id', auth, adminOnly, updateCarrito);
+router.put('/:id', auth, updateCarrito);
 router.delete('/:id', auth, adminOnly, deleteCarrito);
 
 module.exports = router;

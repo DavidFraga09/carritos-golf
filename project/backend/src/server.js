@@ -22,14 +22,18 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/usuarios', require('../src/routes/usuarioRoutes'));
 app.use('/api/carritos', require('../src/routes/carritoRoutes'));
 app.use('/api/ubicaciones', require('../src/routes/ubicacionRoutes'));
+app.use('/api/alertas', require('../src/routes/alertaRoutes'));
 
-// 404 Handler (Solo para rutas API, no afecta public/)
+// 404 Handler (Solo para rutas API)
 app.use('/api', (req, res) => {
   res.status(404).json({ message: 'Ruta API no encontrada' });
 });
 
 // Conexión a MongoDB
-mongoose.connect(process.env.MONGO_URI)
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
   .then(() => {
     console.log('✅ Conectado a MongoDB');
     const PORT = process.env.PORT || 5000;
